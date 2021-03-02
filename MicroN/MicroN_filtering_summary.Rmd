@@ -1,0 +1,186 @@
+---
+title: "MicroN filtering summary"
+author: "Joana Séneca"
+date: "4/11/2020"
+output: html_document
+toc: true
+toc_float: true
+---
+
+
+## 1. Summary of this sheet
+<p>This script imports, filters and exports OTU tables for the 16S and ITS1 amplicon sequencing dataset originally published by:<p>
+
+<p>Zheng, Q. et al. Soil multifunctionality is affected by the soil environment and by microbial community composition and diversity. Soil Biol. Biochem. 136, 107521 (2019).<p>
+
+<p>The raw fastq files are deposited on NCBI under Bioproject number PRJNA551019.<p>
+<p>Shortly, both 16S and ITS datasets were:<p>
+<p>1. Taxonomically filtered: OTUs not affiliated with the groups of interests were excluded;<p>
+2. Abundance filtered: OTUs with an overall abundance < 0.01%  were excluded.<p>
+
+<p>Notes: One sample (Sample_ID=SF4) had too few reads for both ITS and 16S and was probably a sequencing fail, so it was removed. This means that the Forest x Silicate treatment combination has one less replicate (n=3)<p>
+
+
+
+## 2. Filtering ITS
+
+### 2.1 Initial ITS phyloseq object
+Taking a look at the initial phyloseq object 
+
+```{r include=FALSE}
+load("~/Desktop/MicroN/02_data/MicroN_phyloseq_objects.RData")
+library(dplyr)
+library(tidyverse)
+library(tibble)
+library(phyloseq)
+```
+
+```{r}
+phy_ITS 
+```
+
+Plotting the phyloseq object colored by phylum 
+```{r echo=T}
+plot_bar(phy_ITS, fill='phylum_id') #there's a sample that failed, and must be removed
+
+```
+
+### 2.2 Removing failed sample
+Removing this sample and checking the phyloseq object again:
+```{r include=FALSE}
+phy_ITS_pruned <- subset_samples(phy_ITS, Sequencing_ID !="SAMPLE.767.GF.II.8.60")
+```
+```{r}
+phy_ITS_pruned
+```
+
+### 2.3 Taxonomic filtering
+Check if there are unspecific taxonomic groups
+```{r}
+get_taxa_unique(phy_ITS_pruned, taxonomic.rank = 'phylum_id')
+
+```
+
+### 2.4 Abundance filtering
+Since every phyla are associated with Fungi and there's nothing to exclude, we move on to the abundance filter where we'll be excluding low abundant OTUs (threshold= 0.01%)
+```{r include=FALSE}
+phy_ITS_f1 <- phyloseq_filter_taxa_rel_abund(phy_ITS_pruned, frac=0.0001)
+
+```
+```{r}
+phy_ITS_f1
+```
+```{r echo=FALSE}
+plot_bar(phy_ITS_f1, fill='phylum_id') 
+
+```
+
+
+### 2.5 Last checks
+Let's finally check the range of reads per sample on the filtered ITS phyloseq object:
+```{r}
+
+min(sample_sums(phy_ITS_f1)) 
+```
+```{r}
+mean(sample_sums(phy_ITS_f1))
+```
+```{r}
+max(sample_sums(phy_ITS_f1))
+```
+
+
+
+
+## 3. Filtering 16S
+
+### 3.1 Initial 16S phyloseq
+Taking a look at the initial phyloseq object 
+
+```{r include=FALSE}
+load("/Desktop/MicroN/MicroN_phyloseq_objects.RData")
+```
+
+```{r}
+phy_16S
+```
+
+Plotting the phyloseq object colored by phylum 
+```{r echo=T}
+plot_bar(phy_16S, fill='phylum_id') #there's a sample that failed and must be removed
+
+```
+
+### 3.2 Removing failed sample
+Removing this sample and checking the phyloseq object again:
+```{r include=FALSE}
+phy_16S_pruned <- subset_samples(phy_16S, Sequencing_ID !="SAMPLE.325.GF.II.5.60")
+```
+```{r}
+phy_16S_pruned
+```
+
+### 3.3 Taxonomic filtering
+Check if there are unspecific taxonomic groups
+```{r}
+get_taxa_unique(phy_16S_pruned, taxonomic.rank = 'domain_id')
+
+```
+We will want to remove all the OTUs associated with Eukaryota and maybe also the Unclassified, but let's first take a look at how many OTUs represent these taxa, as well as their abundance across the samples
+
+```{r echo=FALSE}
+phy_16S_pruned %>% subset_taxa(domain_id %in% c("unknown", "Eukaryota")) %>% ntaxa()
+```
+
+```{r include=FALSE}
+sub <- subset_taxa(phy_16S_pruned, domain_id %in% c("unknown", "Eukaryota"))
+```
+
+```{r echo=FALSE}
+plot_bar(sub, fill='domain_id') # ok, they're very low abundant. Both will be removed.
+```
+
+
+
+Since they are very low abundant, we will be removing both Eukaryotes and OTUs unclassified at the domain level. Let's take a look at the new trimmed phyloseq object:
+
+```{r include=FALSE}
+phy_16S_f1 <- subset_taxa(phy_16S_pruned, !domain_id %in% c("unknown", "Eukaryota"))
+
+```
+```{r}
+phy_16S_f1
+```
+
+### 3.4 Abundance filtering
+Let's then apply the low abundance filter (remove OTUs with an overall abundance less than 0.01%) and take a look at the filtered object:
+
+```{r include=FALSE}
+phy_16S_f2 <- phyloseq_filter_taxa_rel_abund(phy_16S_f1, frac=0.0001)
+
+```
+
+```{r}
+phy_16S_f2
+```
+```{r echo=FALSE}
+plot_bar(phy_16S_f2, fill='phylum_id') 
+```
+
+### 3.5 Last checks
+Let's finally check the range of reads per sample on the filtered 16S phyloseq object:
+```{r}
+
+min(sample_sums(phy_16S_f2)) 
+```
+```{r}
+mean(sample_sums(phy_16S_f2))
+```
+```{r}
+max(sample_sums(phy_16S_f2))
+```
+
+```{r echo=TRUE}
+sessionInfo()
+```
+
